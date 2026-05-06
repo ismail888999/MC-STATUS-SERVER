@@ -1,5 +1,12 @@
-const { Client, GatewayIntentBits, EmbedBuilder } = require('discord.js');
-const util = require('minecraft-server-util');
+const {
+    Client,
+    GatewayIntentBits,
+    EmbedBuilder,
+    ActivityType
+} = require("discord.js");
+
+const util = require("minecraft-server-util");
+const fs = require("fs");
 
 const client = new Client({
     intents: [GatewayIntentBits.Guilds]
@@ -10,44 +17,106 @@ const CHANNEL_ID = "1495435234823372810";
 const HOST = "2xrduel.qzz.io";
 const PORT = 13214;
 
+const DATA_FILE = "./message.json";
+
 let statusMessage = null;
 
-client.once('ready', async () => {
-    console.log(`✅ Bot ready: ${client.user.tag}`);
+function saveMessageId(id) {
+    fs.writeFileSync(DATA_FILE, JSON.stringify({ messageId: id }));
+}
 
-    const channel = await client.channels.fetch(CHANNEL_ID);
+function loadMessageId() {
+    if (!fs.existsSync(DATA_FILE)) return null;
+    return JSON.parse(fs.readFileSync(DATA_FILE)).messageId;
+}
 
-    setInterval(async () => {
-        try {
-            const res = await util.status(HOST, PORT, { timeout: 5000 });
+async function updateStatus() {
+    try {
+        const channel = await client.channels.fetch(CHANNEL_ID);
 
-            const playersOnline = res.players?.online ?? 0;
-            const playersMax = res.players?.max ?? 0;
+        const res = await util.status(HOST, PORT, {
+            timeout: 5000
+        });
 
-            const embed = new EmbedBuilder()
-                .setTitle(playersMax === 0 ? "🔴 Server OFFLINE" : "🟢 Server ONLINE")
-                .setDescription(`🌐 IP: ${HOST}\n👥 Players: ${playersOnline}/${playersMax}`)
-                .setColor(playersMax === 0 ? "Red" : "Green");
+        const playersOnline = res.players.online;
+        const playersMax = res.players.max;
+        const version = res.version.name;
+        const ping = res.roundTripLatency;
+        const motd = res.motd.clean;
 
-            if (!statusMessage) {
-                statusMessage = await channel.send({ embeds: [embed] });
-            } else {
-                await statusMessage.edit({ embeds: [embed] });
-            }
+        const embed = new EmbedBuilder()
+            .setTitle("🟢 Server ONLINE")
+            .addFields(
+                { name: "🌐 IP", value: HOST, inline: true },
+                { name: "👥 Players", value: `${playersOnline}/${playersMax}`, inline: true },
+                { name: "📡 Ping", value: `${ping}ms`, inline: true },
+                { name: "⚙ Version", value: version, inline: true },
+                { name: "📝 MOTD", value: motd || "No MOTD" }
+            )
+            .setColor("Green")
+            .setTimestamp();
 
-        } catch (err) {
-            const embed = new EmbedBuilder()
-                .setTitle("🔴 Server OFFLINE")
-                .setDescription(`🌐 IP: ${HOST}\n👥 Players: 0/0`)
-                .setColor("Red");
+        if (!statusMessage) {
+            const savedId = loadMessageId();
 
-            if (!statusMessage) {
-                statusMessage = await channel.send({ embeds: [embed] });
-            } else {
-                await statusMessage.edit({ embeds: [embed] });
+            if (savedId) {
+                try {
+                    statusMessage = await channel.messages.fetch(savedId);
+                } catch {
+                    statusMessage = null;
+                }
             }
         }
-    }, 15000);
+
+        if (!statusMessage) {
+            statusMessage = await channel.send({
+                embeds: [embed]
+            });
+            saveMessageId(statusMessage.id);
+        } else {
+            await statusMessage.edit({
+                embeds: [embed]
+            });
+        }
+
+        client.user.setActivity(
+            `${playersOnline}/${playersMax} Players`,
+            { type: ActivityType.Watching }
+        );
+
+    } catch (err) {
+        const channel = await client.channels.fetch(CHANNEL_ID);
+
+        const embed = new EmbedBuilder()
+            .setTitle("🔴 Server OFFLINE")
+            .setDescription(`🌐 ${HOST}\n👥 0/0`)
+            .setColor("Red")
+            .setTimestamp();
+
+        if (!statusMessage) {
+            statusMessage = await channel.send({
+                embeds: [embed]
+            });
+            saveMessageId(statusMessage.id);
+        } else {
+            await statusMessage.edit({
+                embeds: [embed]
+            });
+        }
+
+        client.user.setActivity(
+            "Server Offline",
+            { type: ActivityType.Watching }
+        );
+    }
+}
+
+client.once("clientReady", async () => {
+    console.log(`✅ Bot ready: ${client.user.tag}`);
+
+    await updateStatus();
+
+    setInterval(updateStatus, 15000);
 });
 
 client.login(TOKEN);
