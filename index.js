@@ -346,4 +346,3 @@ client.login(TOKEN).catch(err => {
     console.error(`Failed to login: ${err.message}`);
     process.exit(1);
 });
-```
