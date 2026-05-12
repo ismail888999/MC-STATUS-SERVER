@@ -1,9 +1,3 @@
- (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
-diff --git a/index.js b/index.js
-index 33ffd35202927cbf4cde4c6eaf47604ce19b8c9c..a4f48f44d64405ee7f9fd882a2baecd702258fe2 100644
---- a/index.js
-+++ b/index.js
-@@ -1,217 +1,263 @@
 -const {
 -    Client,
 -    GatewayIntentBits,
@@ -484,6 +478,3 @@ index 33ffd35202927cbf4cde4c6eaf47604ce19b8c9c..a4f48f44d64405ee7f9fd882a2baecd7
 +    console.error(`Failed to login: ${err.message}`);
 +    process.exit(1);
 +});
- 
-EOF
-)
